@@ -1,7 +1,7 @@
 /**
  * playground.js — validate a filter against the published grammar, in the browser.
  *
- * This is not a simulation. `/validator.mjs` is compiled at build time from the
+ * This is not a simulation. `/validator.js` is compiled at build time from the
  * same `open-predicate-schema.json` this site serves at its `$id`, by a standard
  * validator, so a verdict here is the verdict a conforming server would reach
  * about well-formedness. What it cannot tell you is whether a particular
@@ -11,7 +11,7 @@
  * Nothing is sent anywhere: the filter never leaves the page.
  */
 
-import validate from "/validator.mjs";
+import validate from "/validator.js";
 
 const els = {
   input: document.getElementById("filter-input"),

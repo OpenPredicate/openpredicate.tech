@@ -449,8 +449,8 @@ async function main() {
   await cp("static", OUT, { recursive: true });
 
   // The playground's validator, compiled from the schema above.
-  const { bytes } = await buildValidator(schema, join(OUT, "validator.mjs"));
-  const checked = await checkValidator(join(OUT, "validator.mjs"));
+  const { bytes } = await buildValidator(schema, join(OUT, "validator.js"));
+  const checked = await checkValidator(join(OUT, "validator.js"));
   console.log(`validator: ${(bytes / 1024).toFixed(0)} kB, ${checked} checks passed`);
 
   await buildHome();

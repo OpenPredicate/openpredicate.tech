@@ -47,7 +47,7 @@ const ASSETS = [
   "styles.css",
   "site.js",
   "playground.js",
-  "validator.mjs",
+  "validator.js",
   "sitemap.xml",
   "robots.txt",
   "CNAME",
@@ -116,7 +116,7 @@ test("every problem page states its own type URI", async () => {
 });
 
 /**
- * Run the playground's real module against a stub DOM. `/validator.mjs` is an
+ * Run the playground's real module against a stub DOM. `/validator.js` is an
  * absolute site path, so it is aliased to the built bundle.
  */
 async function mountPlayground() {
@@ -134,8 +134,8 @@ async function mountPlayground() {
         // site-absolute import is resolved to the built bundle by hand.
         name: "site-absolute-imports",
         setup(build) {
-          build.onResolve({ filter: /^\/validator\.mjs$/ }, () => ({
-            path: join(process.cwd(), "dist", "validator.mjs"),
+          build.onResolve({ filter: /^\/validator\.js$/ }, () => ({
+            path: join(process.cwd(), "dist", "validator.js"),
           }));
         },
       },
@@ -207,7 +207,7 @@ test("the playground validates a well-formed filter", async () => {
 });
 
 test("the built validator agrees with the grammar", async () => {
-  const { default: validate } = await import(`${process.cwd()}/dist/validator.mjs`);
+  const { default: validate } = await import(`${process.cwd()}/dist/validator.js`);
 
   const valid = [
     { status: "available" },
