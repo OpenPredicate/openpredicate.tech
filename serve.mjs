@@ -3,15 +3,19 @@
  *
  * It resolves clean URLs the way Netlify does (`/spec/` → `/spec/index.html`) and
  * falls back to `404.html`, so what you see locally is what gets published.
+ *
+ * `serve()` is exported because test-layout.mjs drives a real browser against
+ * this same server: one definition of how a path resolves, rather than two that
+ * can drift apart.
  */
 
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { createServer } from "node:http";
-import { extname, join, normalize } from "node:path";
+import { extname, join, normalize, resolve as resolvePath } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const ROOT = "dist";
-const PORT = Number(process.env.PORT ?? 4173);
 
 const TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -31,7 +35,7 @@ function contentType(path) {
   return TYPES[extname(path)] ?? "application/octet-stream";
 }
 
-async function resolve(urlPath) {
+async function resolveFile(urlPath) {
   const clean = normalize(decodeURIComponent(urlPath.split("?")[0])).replace(/^(\.\.[/\\])+/, "");
   const candidates = clean.endsWith("/")
     ? [join(ROOT, clean, "index.html")]
@@ -46,11 +50,19 @@ async function resolve(urlPath) {
   return null;
 }
 
-createServer(async (req, res) => {
-  const file = (await resolve(req.url)) ?? join(ROOT, "404.html");
-  const status = file.endsWith("404.html") && !req.url.includes("404") ? 404 : 200;
-  res.writeHead(status, { "content-type": contentType(file), "cache-control": "no-store" });
-  createReadStream(file).pipe(res);
-}).listen(PORT, () => {
-  console.log(`openpredicate.tech → http://localhost:${PORT}`);
-});
+/** Start the server. Port 0 asks the OS for a free one, which is what tests want. */
+export function serve(port = Number(process.env.PORT ?? 4173)) {
+  const server = createServer(async (req, res) => {
+    const file = (await resolveFile(req.url)) ?? join(ROOT, "404.html");
+    const status = file.endsWith("404.html") && !req.url.includes("404") ? 404 : 200;
+    res.writeHead(status, { "content-type": contentType(file), "cache-control": "no-store" });
+    createReadStream(file).pipe(res);
+  });
+  return new Promise((ready) => server.listen(port, () => ready(server)));
+}
+
+// Only when run as a script, so importing it for a test does not start a server.
+if (process.argv[1] && resolvePath(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const server = await serve();
+  console.log(`openpredicate.tech → http://localhost:${server.address().port}`);
+}

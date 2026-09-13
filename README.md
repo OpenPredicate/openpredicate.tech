@@ -73,6 +73,30 @@ worse than no site:
 The build also refuses to publish a schema whose `$id` is not the URL this site serves it at — a
 schema published at any other address is a broken pin.
 
+### Tests
+
+```bash
+npm test            # build, then check the built site
+npm run test:layout # build, then measure it in a real browser
+npm run test:all    # both
+```
+
+[`test.mjs`](./test.mjs) checks the output: every page and asset exists, links resolve, the schema
+sits at its own `$id`, the playground really rejects a malformed filter.
+
+[`test-layout.mjs`](./test-layout.mjs) checks what only a browser can see — horizontal overflow,
+computed contrast, target sizes, heading outline — across four viewport widths and both colour
+schemes. Each of its assertions stands for a bug that reached production once: a bare `1fr` grid
+track letting a wide `<pre>` stretch the page past the viewport, a `minmax(380px, …)` that could not
+fit a 342px container, a copy button left `opacity: 0` until `:hover` on devices that never hover,
+and four colour pairs under 4.5:1. All four were confirmed to fail the suite when reintroduced.
+
+It drives Chrome over the DevTools Protocol through [`lib/browser.mjs`](./lib/browser.mjs) — about
+sixty lines, no driver dependency. Chrome's `--window-size` silently clamps to 500px, so the
+viewport is set through `Emulation` instead; a screenshot taken at `--window-size=390` is not a
+390px render, and trusting one is how the overflow bug survived a visual check. Set `CHROME_PATH` to
+pick a binary. With no browser present the suite fails rather than skipping.
+
 ### Tracking the specification
 
 The normative documents live in the [specification
@@ -108,10 +132,9 @@ rather than a site that claims to document a release it never pulled in.
 Syncing is a separate step from the build on purpose: a build never touches the network, so it is
 reproducible and cannot be broken by a push upstream.
 
-> One gap worth knowing about: nothing in this repository runs `npm test` on a pull request.
-> Netlify will build a preview, which catches a broken build, but not a failing assertion. The sync
-> workflow therefore runs the tests itself and reports the result in the pull request body. A small
-> `pull_request` workflow would be the better fix.
+[`ci.yml`](./.github/workflows/ci.yml) runs both suites on every pull request and every push to
+`main`. The sync workflow also runs them itself, so that a sync whose tests fail still opens a pull
+request with the result stated — that is the case a human most needs to see the diff for.
 
 ## Deploying
 

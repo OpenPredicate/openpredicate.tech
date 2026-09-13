@@ -68,11 +68,10 @@ jobs:
         if: steps.target.outputs.changed == 'true'
         run: node sync.mjs "${{ steps.target.outputs.ref }}"
 
-      # Nothing else in this repo runs the tests on a pull request — Netlify builds
-      # a preview, which catches a broken build but not a failing assertion — so
-      # this is the only real check the PR will carry. It must not gate the PR
-      # being opened, though: a sync that fails its tests is exactly the case a
-      # human most needs to see the diff for. Recorded and reported in the body.
+      # ci.yml also runs these on the pull request. Running them here too is
+      # not redundant: it must not gate the PR being *opened*, because a sync
+      # that fails its tests is exactly the case a human most needs to see the
+      # diff for. So the result is recorded and reported in the body instead.
       - name: Build and test
         if: steps.target.outputs.changed == 'true'
         id: verify
