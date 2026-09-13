@@ -1,0 +1,20 @@
+{
+  "name": "openpredicate.tech",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The public website for the OpenPredicate specification",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node build.mjs && node --test test.mjs",
+    "sync": "node sync.mjs",
+    "start": "npm run build && node serve.mjs"
+  },
+  "devDependencies": {
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
+    "esbuild": "^0.28.2",
+    "marked": "^15.0.6"
+  }
+}
