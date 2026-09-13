@@ -9,7 +9,7 @@
  * has no description, or the schema is missing, it stops.
  */
 
-import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 import { page, SITE, escapeHtml } from "./lib/layout.mjs";
@@ -302,15 +302,45 @@ async function buildProblems() {
   }
 }
 
+/** Newest first. */
+function byVersionDesc(a, b) {
+  const [x, y] = [a, b].map((v) => v.split(".").map(Number));
+  return y[0] - x[0] || y[1] - x[1] || y[2] - x[2];
+}
+
+/**
+ * Every grammar version vendored under static/schema/, newest first.
+ *
+ * Read off the filesystem rather than kept by hand: a sync that moves the
+ * grammar adds a directory, and the pages that list versions follow without an
+ * edit. Every version ever published stays served, because its `$id` is a pin.
+ */
+async function publishedVersions() {
+  return (await readdir("static/schema", { withFileTypes: true }))
+    .filter((e) => e.isDirectory() && /^v\d+\.\d+\.\d+$/.test(e.name))
+    .map((e) => e.name.slice(1))
+    .sort(byVersionDesc);
+}
+
 async function buildSchemaIndex(schema) {
-  const versions = [
-    {
-      version: SITE.grammarVersion,
-      url: `/schema/v${SITE.grammarVersion}/open-predicate-schema.json`,
-      status: "Current",
-      note: "The grammar as of release 0.5.0.",
-    },
-  ];
+  const published = await publishedVersions();
+
+  if (!published.includes(SITE.grammarVersion)) {
+    throw new Error(
+      `The current grammar v${SITE.grammarVersion} has no directory under static/schema/. ` +
+        `Run 'npm run sync' to vendor it.`,
+    );
+  }
+
+  const versions = published.map((version) => ({
+    version,
+    url: `/schema/v${version}/open-predicate-schema.json`,
+    status: version === SITE.grammarVersion ? "Current" : "Superseded",
+    note:
+      version === SITE.grammarVersion
+        ? `The grammar as of release ${SITE.releaseVersion}.`
+        : "Superseded, and still served at its original URL.",
+  }));
 
   const rows = versions
     .map(
@@ -351,9 +381,10 @@ async function buildSchemaIndex(schema) {
     <p>
       <code>$ref</code> the versioned URL, or vendor the file and reference your copy — both are
       supported, and vendoring is the safer default for a build that must not depend on this host.
-      The version in the <code>$id</code> tracks the <em>grammar</em>, not the repository: release
-      0.5.0 shipped tooling changes and left the <code>$id</code> at <code>v0.4.0</code> because the
-      grammar did not move.
+      The version in the <code>$id</code> tracks the <em>grammar</em>, not the repository &mdash;
+      release <code>v${SITE.releaseVersion}</code> serves grammar
+      <code>v${SITE.grammarVersion}</code>, because a release that ships tooling or naming changes
+      leaves the <code>$id</code> where it is.
     </p>
     ${codeBlock(
       `curl -O ${SITE.schemaUrl}`,
@@ -429,7 +460,23 @@ ${urls}
     join(OUT, "robots.txt"),
     `User-agent: *\nAllow: /\nSitemap: ${SITE.origin}/sitemap.xml\n`,
   );
-  await cp("CNAME", join(OUT, "CNAME"));
+
+  // Netlify reads _headers from the publish directory. The schema needs three
+  // things a static host does not give it by default: the media type a $ref
+  // consumer expects, CORS — it is fetched cross-origin by browser tooling and
+  // by this site's own playground — and an immutable cache, which is safe
+  // precisely because a published $id never changes. Generated per version so a
+  // grammar bump does not need an edit here.
+  const headers = (await publishedVersions())
+    .map(
+      (v) => `/schema/v${v}/open-predicate-schema.json
+  Content-Type: application/schema+json; charset=utf-8
+  Access-Control-Allow-Origin: *
+  Cache-Control: public, max-age=31536000, immutable
+`,
+    )
+    .join("\n");
+  await writeFile(join(OUT, "_headers"), headers);
 }
 
 async function main() {

@@ -17,6 +17,10 @@ import test from "node:test";
 
 import * as esbuild from "esbuild";
 
+import { SITE } from "./lib/layout.mjs";
+
+const SCHEMA = `schema/v${SITE.grammarVersion}/open-predicate-schema.json`;
+
 const OUT = "dist";
 const read = (p) => readFile(join(OUT, p), "utf8");
 const exists = async (p) => {
@@ -50,10 +54,10 @@ const ASSETS = [
   "validator.js",
   "sitemap.xml",
   "robots.txt",
-  "CNAME",
+  "_headers",
   "assets/logo.svg",
   "assets/logo-512.png",
-  "schema/v0.4.0/open-predicate-schema.json",
+  SCHEMA,
 ];
 
 test("every page is built", async () => {
@@ -65,9 +69,102 @@ test("every asset is built", async () => {
 });
 
 test("the schema is served at its own $id", async () => {
-  const schema = JSON.parse(await read("schema/v0.4.0/open-predicate-schema.json"));
-  assert.equal(schema.$id, "https://openpredicate.tech/schema/v0.4.0/open-predicate-schema.json");
-  assert.equal(await read("CNAME"), "openpredicate.tech\n");
+  const schema = JSON.parse(await read(SCHEMA));
+  assert.equal(schema.$id, SITE.schemaUrl);
+});
+
+/**
+ * The versioned URL is the product: it is what an OpenAPI document `$ref`s and
+ * what `curl -O` on /schema/ fetches. So it has to be the raw schema and
+ * nothing else — not an HTML page, not a wrapper — and it has to be complete on
+ * its own, because a consumer resolving that one URL gets no other file.
+ */
+test("the versioned URL is the raw schema, and complete on its own", async () => {
+  const raw = await read(SCHEMA);
+
+  // Byte-identical to what was vendored, so nothing rewrites it on the way out.
+  assert.equal(raw, await readFile(`static/${SCHEMA}`, "utf8"));
+  assert.ok(!raw.startsWith("<"), "the schema URL is serving markup, not JSON");
+
+  const schema = JSON.parse(raw);
+  assert.equal(schema.$schema, "https://json-schema.org/draft/2020-12/schema");
+  assert.equal(schema.$id, SITE.schemaUrl);
+
+  // Every $ref must be a local fragment. An external one would make the served
+  // file an incomplete schema that silently fails to resolve for a consumer.
+  const refs = [];
+  const walk = (node) => {
+    if (Array.isArray(node)) return node.forEach(walk);
+    if (node === null || typeof node !== "object") return;
+    for (const [k, v] of Object.entries(node)) {
+      if (k === "$ref" && typeof v === "string") refs.push(v);
+      else walk(v);
+    }
+  };
+  walk(schema);
+
+  assert.ok(refs.length > 0, "expected the schema to use $ref internally");
+  assert.deepEqual(
+    refs.filter((r) => !r.startsWith("#")),
+    [],
+    "the schema has external $refs, so the versioned URL alone is not resolvable",
+  );
+});
+
+/**
+ * The version the site displays is only as good as the sync that produced it.
+ * These two cross-check it against artefacts that were fetched independently,
+ * so a half-finished sync — or a hand-edited constant — fails here rather than
+ * shipping a site that claims to document a release it has not pulled in.
+ */
+test("the displayed version matches the vendored specification", async () => {
+  const record = JSON.parse(await readFile("content/spec-version.json", "utf8"));
+  assert.equal(SITE.releaseVersion, record.release, "SITE.releaseVersion is not what sync recorded");
+  assert.equal(SITE.grammarVersion, record.grammar, "SITE.grammarVersion is not what sync recorded");
+
+  // The changelog is fetched separately from the schema, so agreeing with it is
+  // real evidence that both came from the same upstream ref.
+  const changelog = await readFile("content/CHANGELOG.md", "utf8");
+  assert.equal(
+    changelog.match(/^## \[(\d+\.\d+\.\d+)\]/m)?.[1],
+    SITE.releaseVersion,
+    `the newest release in CHANGELOG.md is not v${SITE.releaseVersion} — run 'npm run sync'`,
+  );
+
+  const schema = JSON.parse(await read(SCHEMA));
+  assert.equal(schema.$id, record.schemaId);
+});
+
+test("every published schema version is still served and listed", async () => {
+  const published = (await readdir("static/schema", { withFileTypes: true }))
+    .filter((e) => e.isDirectory())
+    .map((e) => e.name);
+
+  assert.ok(published.includes(`v${SITE.grammarVersion}`), "the current grammar is not vendored");
+
+  // A published $id is immutable, so an older version staying reachable is part
+  // of the specification's promise, not a nicety.
+  const index = await read("schema/index.html");
+  const headers = await read("_headers");
+  for (const dir of published) {
+    assert.ok(
+      await exists(`schema/${dir}/open-predicate-schema.json`),
+      `${dir} is vendored but not published to dist/`,
+    );
+    assert.ok(index.includes(`<code>${dir}</code>`), `${dir} has no row on /schema/`);
+    assert.ok(
+      headers.includes(`/schema/${dir}/open-predicate-schema.json`),
+      `${dir} has no _headers rule, so the host would serve it as plain JSON`,
+    );
+  }
+});
+
+test("the schema is served with the media type a $ref consumer expects", async () => {
+  const headers = await read("_headers");
+  assert.match(headers, /^ {2}Content-Type: application\/schema\+json; charset=utf-8$/m);
+  assert.match(headers, /^ {2}Access-Control-Allow-Origin: \*$/m);
+  // Safe only because a published $id never changes.
+  assert.match(headers, /^ {2}Cache-Control: public, max-age=31536000, immutable$/m);
 });
 
 test("internal links point at pages that exist", async () => {
@@ -92,7 +189,7 @@ test("no page leaks an unresolved template expression", async () => {
 });
 
 test("the operator reference covers every operator in x-profiles", async () => {
-  const schema = JSON.parse(await read("schema/v0.4.0/open-predicate-schema.json"));
+  const schema = JSON.parse(await read(SCHEMA));
   const html = await read("operators/index.html");
   for (const name of Object.values(schema["x-profiles"]).flat()) {
     assert.ok(html.includes(`id="op-${name.slice(1)}"`), `operator missing from reference: ${name}`);

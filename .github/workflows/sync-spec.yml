@@ -1,0 +1,108 @@
+#
+# Sync spec — notice a new specification release and open a pull request.
+#
+# The site vendors the normative documents (see sync.mjs), which means a release
+# upstream does not reach the site until someone pulls it in. This watches for
+# that and does the pulling, but stops at a pull request: a human still reads
+# the diff before it publishes, and the build itself never touches the network.
+#
+name: Sync spec
+
+on:
+  schedule:
+    # Daily. Off the hour, because top-of-hour cron slots are the congested ones.
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Tag or branch to sync (default: the latest upstream release)"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: sync-spec
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Decide what to sync
+        id: target
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_REF: ${{ inputs.ref }}
+        run: |
+          set -euo pipefail
+          ref="$INPUT_REF"
+          if [ -z "$ref" ]; then
+            ref=$(gh release view --repo OpenPredicate/open-predicate --json tagName -q .tagName)
+          fi
+          # What the site currently claims, as recorded by the last sync.
+          have="v$(jq -r .release content/spec-version.json)"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          if [ "$ref" = "$have" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Already synced to $have. Nothing to do."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Upstream is $ref, the site is on $have."
+          fi
+
+      - name: Install
+        if: steps.target.outputs.changed == 'true'
+        run: npm ci
+
+      - name: Sync
+        if: steps.target.outputs.changed == 'true'
+        run: node sync.mjs "${{ steps.target.outputs.ref }}"
+
+      # Nothing else in this repo runs the tests on a pull request — Netlify builds
+      # a preview, which catches a broken build but not a failing assertion — so
+      # this is the only real check the PR will carry. It must not gate the PR
+      # being opened, though: a sync that fails its tests is exactly the case a
+      # human most needs to see the diff for. Recorded and reported in the body.
+      - name: Build and test
+        if: steps.target.outputs.changed == 'true'
+        id: verify
+        continue-on-error: true
+        run: npm test
+
+      - name: Open a pull request
+        if: steps.target.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: sync/spec-${{ steps.target.outputs.ref }}
+          delete-branch: true
+          title: "Sync the vendored spec to ${{ steps.target.outputs.ref }}"
+          commit-message: "Sync the vendored spec to ${{ steps.target.outputs.ref }}"
+          labels: spec-sync
+          body: |
+            [`${{ steps.target.outputs.ref }}`](https://github.com/OpenPredicate/open-predicate/releases/tag/${{ steps.target.outputs.ref }})
+            was released upstream. This is `node sync.mjs ${{ steps.target.outputs.ref }}`, nothing
+            else — the version numbers the site displays are derived from the artefacts in this
+            diff, not typed, so there is no constant to bump by hand.
+
+            **`npm test`: ${{ steps.verify.outcome == 'success' && 'passed ✅' || 'FAILED ❌' }}**
+            ([log](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}))
+
+            Worth a look before merging:
+
+            - `content/spec-version.json` — the recorded release and grammar versions.
+            - Whether the grammar moved. If `static/schema/` gained a directory, the `$id` changed
+              and consumers pinning the old one need to know; the old file stays served, and
+              `/schema/` picks up the new row on its own.
+            - The rendered diff on `/spec/` and `/changelog/`, via `npm start`.
+
+            Opened by [`sync-spec.yml`](.github/workflows/sync-spec.yml).

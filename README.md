@@ -73,25 +73,60 @@ worse than no site:
 The build also refuses to publish a schema whose `$id` is not the URL this site serves it at — a
 schema published at any other address is a broken pin.
 
-### Updating the vendored spec
+### Tracking the specification
 
 The normative documents live in the [specification
 repository](https://github.com/OpenPredicate/open-predicate) and are vendored here under
-`content/`:
+`content/`. Keeping up with a release has three parts, so that no step depends on someone
+remembering it.
+
+**It is noticed.** [`.github/workflows/sync-spec.yml`](./.github/workflows/sync-spec.yml) checks the
+upstream releases once a day. When the latest tag is not the one the site records, it syncs, builds,
+tests, and opens a pull request with the diff. Merging is a human's call, and the workflow can be
+run on demand from the Actions tab against any tag or branch.
+
+**It is one command.** Nothing about the version is typed:
 
 ```bash
 npm run sync            # from main
-npm run sync -- v0.5.0  # from a tag
+npm run sync -- v0.6.0  # from a tag
 npm test                # then check the diff
 ```
+
+`sync.mjs` reads the grammar version out of the schema's own `$id` and writes the file to the path
+that `$id` names, so a release that moves the grammar *adds* `static/schema/vX.Y.Z/` instead of
+overwriting a published one — those URLs are immutable, and `/schema/` grows a row for the new
+version on its own. The release version comes from the tag, or from the changelog when syncing an
+untagged branch. Both land in `content/spec-version.json`, which is what
+[`lib/layout.mjs`](./lib/layout.mjs) reads; it is generated, so don't edit it by hand.
+
+**It cannot drift quietly.** `npm test` fails if the version the site displays disagrees with the
+vendored artefacts — including against `CHANGELOG.md`, which is fetched separately from the schema
+and so is real evidence that both came from the same ref. A half-finished sync is a test failure
+rather than a site that claims to document a release it never pulled in.
 
 Syncing is a separate step from the build on purpose: a build never touches the network, so it is
 reproducible and cannot be broken by a push upstream.
 
+> One gap worth knowing about: nothing in this repository runs `npm test` on a pull request.
+> Netlify will build a preview, which catches a broken build, but not a failing assertion. The sync
+> workflow therefore runs the tests itself and reports the result in the pull request body. A small
+> `pull_request` workflow would be the better fix.
+
 ## Deploying
 
-[`.github/workflows/deploy.yml`](./.github/workflows/deploy.yml) builds and publishes to GitHub
-Pages on every push to `main`. The custom domain is set by [`CNAME`](./CNAME).
+Netlify, configured by [`netlify.toml`](./netlify.toml): `npm run build`, publish `dist/`. Pushes to
+`main` deploy; pull requests get a preview, marked `noindex` so a preview cannot outrank the site.
+The custom domain and its certificate are set in Netlify, not in the repository.
+
+Two things the build hands the host:
+
+- **`dist/_headers`**, generated per published schema version. It sets the media type a `$ref`
+  consumer expects (`application/schema+json`), CORS — the schema is fetched cross-origin by
+  tooling and by this site's own playground — and a one-year immutable cache, which is only safe
+  because a published `$id` never changes.
+- **Clean URLs and `404.html`**, which are Netlify defaults rather than configuration.
+  [`serve.mjs`](./serve.mjs) imitates both, so `npm start` shows what will actually be published.
 
 ## License
 
