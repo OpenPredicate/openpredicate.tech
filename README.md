@@ -58,6 +58,28 @@ legible in ten years. The only script that ships is the playground's.
 
 ### The site cannot drift from the standard
 
+### Being found, and being quotable
+
+Most people meeting this project are not searching for "JSON-encoded predicates" — they are trying
+to design a search endpoint. So [`/guide/`](./lib/guide.mjs) answers that question directly, in the
+vocabulary people use, and resolves each decision by linking into the specification rather than
+restating it.
+
+The same content serves agents, which increasingly answer the question instead of a search results
+page:
+
+- **[`/llms.txt`](./build.mjs)** — a short index, per the llmstxt.org convention, so an agent finds
+  the right page in one fetch instead of guessing URLs.
+- **`/llms-full.txt`** — `SPEC.md` verbatim plus the guide's questions and the changelog, so the
+  whole normative text arrives in one request. Verbatim for the same reason `/spec/` renders the
+  file rather than summarising it: a paraphrase of a specification is a second specification nobody
+  maintains.
+- **`schema.org` JSON-LD** on every page, as one connected `@graph` — `Organization`, `WebSite`,
+  and per page a `TechArticle` and `BreadcrumbList` — so the eight pages read as one work with one
+  publisher. The guide adds a `FAQPage` generated from the same array that renders its prose, and a
+  test asserts the two have not drifted.
+- **`robots.txt`** names the major AI crawlers and allows them explicitly.
+
 Three deliberate constraints, because a specification site that contradicts its own specification is
 worse than no site:
 

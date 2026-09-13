@@ -31,6 +31,7 @@ import { serve } from "./serve.mjs";
 /** Every page the navigation offers, plus one problem page as a representative. */
 const PATHS = [
   "/",
+  "/guide/",
   "/spec/",
   "/operators/",
   "/playground/",

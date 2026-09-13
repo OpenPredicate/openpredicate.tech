@@ -16,6 +16,7 @@ import { page, SITE, escapeHtml } from "./lib/layout.mjs";
 import { render, tocHtml } from "./lib/markdown.mjs";
 import { operatorReference } from "./lib/operators.mjs";
 import { homeBody } from "./lib/home.mjs";
+import { guideBody, faqJsonLd, FAQ } from "./lib/guide.mjs";
 import { PROBLEMS, problemBody, problemsIndexBody } from "./lib/problems.mjs";
 import { codeBlock } from "./lib/highlight.mjs";
 import { buildValidator, checkValidator } from "./lib/validator.mjs";
@@ -54,11 +55,30 @@ async function buildHome() {
   await emit(
     "/",
     page({
-      title: "An open standard for JSON-encoded predicates",
-      description: SITE.tagline,
+      title: "The filter grammar for search APIs",
+      description:
+        "Design a search API once. OpenPredicate is one JSON Schema for the filter half of any " +
+        "search endpoint — $ref it from an OpenAPI document, or inline it as an MCP tool's " +
+        "inputSchema, and every search endpoint speaks the same grammar.",
       path: "/",
       heroClass: "home",
       body: homeBody(),
+    }),
+  );
+}
+
+async function buildGuide() {
+  await emit(
+    "/guide/",
+    page({
+      title: "How to design a search API",
+      description:
+        "Where the filter goes, what grammar it speaks, how to describe it in OpenAPI and to an " +
+        "agent as an MCP tool inputSchema, how an endpoint advertises what it serves, and how to " +
+        "reject a filter you cannot answer.",
+      path: "/guide/",
+      jsonLd: faqJsonLd("/guide/"),
+      body: guideBody(),
     }),
   );
 }
@@ -80,7 +100,8 @@ async function buildSpec() {
     page({
       title: "Specification",
       description:
-        "The normative specification: data model, three-valued logic, coercion, operator semantics, safety limits and the error model.",
+        "The normative specification for filtering a search API: data model and field paths, " +
+        "three-valued logic, type coercion, operator semantics, safety limits and the error model.",
       path: "/spec/",
       heroClass: "has-toc",
       body: `
@@ -149,7 +170,8 @@ async function buildOperators(schema) {
     page({
       title: "Operator reference",
       description:
-        "Every OpenPredicate operator, grouped by the profile that carries it, generated from the schema itself.",
+        "Every filter operator a search API can serve — comparison, ranges, sets, pattern " +
+        "matching, array quantifiers — grouped by profile and generated from the schema itself.",
       path: "/operators/",
       body: `
 <article class="doc">
@@ -217,7 +239,8 @@ async function buildPlayground() {
     page({
       title: "Playground",
       description:
-        "Write an OpenPredicate filter and validate it against the published grammar in your browser.",
+        "Write a search filter and validate it against the published grammar in your browser. " +
+        "No server, no sign-up — the validator is compiled from the schema this site serves.",
       path: "/playground/",
       body: `
 <article class="doc playground">
@@ -283,7 +306,8 @@ async function buildProblems() {
     page({
       title: "Error conditions",
       description:
-        "The five conditions a rejected OpenPredicate filter can carry, each with a dereferenceable RFC 9457 type URI.",
+        "How a search API should reject a filter it cannot serve: five named conditions, each " +
+        "with a dereferenceable RFC 9457 problem type URI and a JSON Pointer to the clause.",
       path: "/problems/",
       body: problemsIndexBody(),
     }),
@@ -444,6 +468,88 @@ async function buildNotFound() {
   );
 }
 
+/**
+ * llms.txt — a short, stable index for a language model or crawling agent.
+ *
+ * Following the llmstxt.org convention: one H1, a blockquote summary, then
+ * linked sections. The point is that an agent asked "how should I design a
+ * search API" can find the relevant page in one fetch instead of guessing at
+ * URLs, and can quote the specification rather than paraphrasing the homepage.
+ */
+function llmsIndex() {
+  return `# ${SITE.name}
+
+> ${SITE.tagline} It specifies the predicate and deliberately nothing else — no projection, ordering, pagination or joins — which is what lets one grammar serve every search endpoint in an API. Grammar v${SITE.grammarVersion}, release v${SITE.releaseVersion}, MIT licensed.
+
+The grammar is a single JSON Schema file with no dependencies, published at an immutable versioned
+URL and pinned by \`$id\`. Reference it with \`$ref\` from an OpenAPI document, or inline it as an MCP
+tool's \`inputSchema\`.
+
+## Start here
+
+- [How to design a search API](${SITE.origin}/guide/): the five decisions behind a search endpoint — where the filter goes, what grammar it speaks, how to describe it to developers and to agents, how an endpoint advertises what it serves, and how to reject a filter. Includes answers to the common questions.
+- [Specification](${SITE.origin}/spec/): the normative document. Data model and field paths, three-valued logic, coercion, operator semantics, safety limits, error model, versioning.
+- [Operator reference](${SITE.origin}/operators/): every operator, its operand shape and an example, generated from the schema.
+
+## Artefacts
+
+- [The JSON Schema](${SITE.schemaUrl}): the grammar itself, served as \`application/schema+json\`. Self-contained — every \`$ref\` is internal.
+- [Error conditions](${SITE.origin}/problems/): the five reasons a filter is rejected, each a dereferenceable RFC 9457 type URI.
+- [Schema versions](${SITE.origin}/schema/): every published version, each immutable at its own URL.
+- [Changelog](${SITE.origin}/changelog/): every release, with a migration note for each break.
+
+## Optional
+
+- [Playground](${SITE.origin}/playground/): validate a filter in the browser against the real grammar.
+- [Full text](${SITE.origin}/llms-full.txt): the specification and operator reference as one markdown file.
+- [Repository](${SITE.repo}): source, issues and discussion.
+`;
+}
+
+/**
+ * llms-full.txt — the whole normative text in one fetch.
+ *
+ * This is the vendored SPEC.md, not a retelling of it, for the same reason
+ * /spec/ renders that file rather than summarising it: a paraphrase of a
+ * specification is a second specification that nobody maintains.
+ */
+async function llmsFull() {
+  const spec = await readFile("content/SPEC.md", "utf8");
+  const changelog = await readFile("content/CHANGELOG.md", "utf8");
+  const faq = FAQ.map(
+    ({ q, a }) => `### ${q}\n\n${a.replace(/<[^>]+>/g, "").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&")}\n`,
+  ).join("\n");
+
+  return [
+    `# ${SITE.name} — full text`,
+    "",
+    `> ${SITE.tagline}`,
+    "",
+    `Grammar v${SITE.grammarVersion} · release v${SITE.releaseVersion} · MIT · ${SITE.origin}`,
+    `Schema: ${SITE.schemaUrl}`,
+    "",
+    "This file concatenates the normative specification, the design questions it answers, and the",
+    "release history, so an agent can read the whole thing in one request. The specification text",
+    "below is the same file the repository ships; where this file and the repository disagree, the",
+    "repository is correct.",
+    "",
+    "---",
+    "",
+    spec.trim(),
+    "",
+    "---",
+    "",
+    "## Designing a search API — common questions",
+    "",
+    faq.trim(),
+    "",
+    "---",
+    "",
+    changelog.trim(),
+    "",
+  ].join("\n");
+}
+
 async function buildMeta() {
   const urls = pages
     .map((p) => `  <url><loc>${SITE.origin}${p === "/" ? "/" : p}</loc></url>`)
@@ -456,10 +562,27 @@ ${urls}
 </urlset>
 `,
   );
+  // Every crawler is welcome, and the named ones are spelled out because a
+  // specification is worth more the more places it is quoted correctly from.
+  // The llms.txt pointer is a convention, not a standard — harmless if ignored.
   await writeFile(
     join(OUT, "robots.txt"),
-    `User-agent: *\nAllow: /\nSitemap: ${SITE.origin}/sitemap.xml\n`,
+    [
+      "User-agent: *",
+      "Allow: /",
+      "",
+      "# Agents answering questions about search-API design: /llms.txt is a short",
+      "# index and /llms-full.txt is the whole specification as one markdown file.",
+      ...["GPTBot", "OAI-SearchBot", "ChatGPT-User", "ClaudeBot", "Claude-User", "PerplexityBot", "Google-Extended", "Applebot-Extended", "CCBot"].flatMap(
+        (agent) => [`User-agent: ${agent}`, "Allow: /", ""],
+      ),
+      `Sitemap: ${SITE.origin}/sitemap.xml`,
+      "",
+    ].join("\n"),
   );
+
+  await writeFile(join(OUT, "llms.txt"), llmsIndex());
+  await writeFile(join(OUT, "llms-full.txt"), await llmsFull());
 
   // Netlify reads _headers from the publish directory. It is generated rather
   // than declared in netlify.toml because that file cannot scope headers to a
@@ -536,6 +659,7 @@ async function main() {
   console.log(`validator: ${(bytes / 1024).toFixed(0)} kB, ${checked} checks passed`);
 
   await buildHome();
+  await buildGuide();
   await buildSpec();
   await buildOperators(schema);
   await buildPlayground();

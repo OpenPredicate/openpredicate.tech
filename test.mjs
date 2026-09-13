@@ -33,6 +33,7 @@ const exists = async (p) => {
 
 const PAGES = [
   "index.html",
+  "guide/index.html",
   "spec/index.html",
   "operators/index.html",
   "playground/index.html",
@@ -54,6 +55,8 @@ const ASSETS = [
   "validator.js",
   "sitemap.xml",
   "robots.txt",
+  "llms.txt",
+  "llms-full.txt",
   "_headers",
   "assets/logo.svg",
   "assets/logo-512.png",
@@ -165,6 +168,79 @@ test("the schema is served with the media type a $ref consumer expects", async (
   assert.match(headers, /^ {2}Access-Control-Allow-Origin: \*$/m);
   // Safe only because a published $id never changes.
   assert.match(headers, /^ {2}Cache-Control: public, max-age=31536000, immutable$/m);
+});
+
+test("every page carries valid, connected structured data", async () => {
+  for (const p of PAGES) {
+    const html = await read(p);
+    const block = html.match(/<script type="application\/ld\+json">(.*?)<\/script>/s);
+    assert.ok(block, `${p} has no JSON-LD`);
+    // `<` is escaped going in, so it cannot close the script element early.
+    assert.ok(!block[1].includes("<"), `${p} has an unescaped < inside its JSON-LD`);
+    const graph = JSON.parse(block[1].replace(/\\u003c/g, "<"))["@graph"];
+    const types = graph.map((n) => n["@type"]);
+    assert.ok(types.includes("Organization"), `${p} names no publisher`);
+    assert.ok(types.includes("WebSite"), `${p} is not tied to the site`);
+
+    // Every @id referenced must be defined in the same graph, or the nodes are
+    // a set of unrelated documents rather than one connected work.
+    const defined = new Set(graph.map((n) => n["@id"]).filter(Boolean));
+    const referenced = [...JSON.stringify(graph).matchAll(/"@id":"([^"]+)"/g)].map((m) => m[1]);
+    for (const id of referenced) {
+      if (id.startsWith("https://openpredicate.tech/#")) {
+        assert.ok(defined.has(id), `${p} references ${id} but never defines it`);
+      }
+    }
+  }
+});
+
+test("the FAQ a crawler reads is the FAQ a reader sees", async () => {
+  // The answers are rendered twice — as prose and as FAQPage JSON-LD — from one
+  // source. If that ever becomes two sources, this catches the drift.
+  const html = await read("guide/index.html");
+  const graph = JSON.parse(
+    html.match(/<script type="application\/ld\+json">(.*?)<\/script>/s)[1].replace(/\\u003c/g, "<"),
+  )["@graph"];
+  const faq = graph.find((n) => n["@type"] === "FAQPage");
+  assert.ok(faq, "the guide has no FAQPage node");
+  assert.ok(faq.mainEntity.length >= 6, "too few questions to be worth the markup");
+
+  const text = html.replace(/<[^>]+>/g, " ").replace(/&#39;/g, "'").replace(/\s+/g, " ");
+  for (const { name, acceptedAnswer } of faq.mainEntity) {
+    assert.ok(text.includes(name), `question not on the page: "${name}"`);
+    // The first clause of each answer is enough to prove it is the same answer.
+    const opening = acceptedAnswer.text.split(/[.,;—]/)[0].trim();
+    assert.ok(text.includes(opening), `answer not on the page: "${opening}"`);
+  }
+});
+
+test("the agent-readable index points only at things that exist", async () => {
+  const index = await read("llms.txt");
+  assert.match(index, /^# OpenPredicate\n/, "llms.txt should open with a single H1");
+  assert.match(index, /\n> /, "llms.txt should carry a blockquote summary");
+
+  const urls = [...index.matchAll(/\((https:\/\/openpredicate\.tech([^)]*))\)/g)];
+  assert.ok(urls.length >= 6, "llms.txt lists too little to be useful");
+  for (const [, , path] of urls) {
+    const target = path.endsWith("/") ? `${path.slice(1)}index.html` : path.slice(1);
+    assert.ok(await exists(target), `llms.txt links to ${path}, which is not published`);
+  }
+
+  const full = await read("llms-full.txt");
+  const spec = await readFile("content/SPEC.md", "utf8");
+  // The normative text, not a retelling of it.
+  assert.ok(full.includes(spec.trim()), "llms-full.txt does not contain SPEC.md verbatim");
+  assert.ok(full.includes("## Designing a search API"), "llms-full.txt is missing the questions");
+});
+
+test("robots.txt welcomes crawlers and points at the sitemap", async () => {
+  const robots = await read("robots.txt");
+  assert.match(robots, /^User-agent: \*\nAllow: \/$/m);
+  assert.match(robots, new RegExp(`^Sitemap: ${SITE.origin}/sitemap\\.xml$`, "m"));
+  for (const agent of ["GPTBot", "ClaudeBot", "PerplexityBot"]) {
+    assert.match(robots, new RegExp(`^User-agent: ${agent}$`, "m"), `${agent} is not named`);
+  }
+  assert.ok(!/^Disallow: \/$/m.test(robots), "robots.txt disallows the whole site");
 });
 
 test("internal links point at pages that exist", async () => {

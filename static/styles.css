@@ -777,6 +777,58 @@ h4:hover .anchor,
   }
 }
 
+/* ---------- guide: FAQ and checklist ---------- */
+
+.faq {
+  margin: 1.6rem 0 2.4rem;
+  border-top: 1px solid var(--border);
+}
+
+.faq-item {
+  border-bottom: 1px solid var(--border);
+  padding: 1.2rem 0;
+}
+
+.faq-item h3 {
+  font-size: 1.04rem;
+  font-weight: 620;
+  margin: 0 0 0.5rem;
+  line-height: 1.4;
+}
+
+.faq-item p {
+  margin: 0;
+  color: var(--fg-muted);
+  max-width: 74ch;
+}
+
+.checklist {
+  list-style: none;
+  margin: 1.4rem 0 2rem;
+  padding: 0;
+}
+
+.checklist li {
+  position: relative;
+  padding-left: 1.75rem;
+  margin-bottom: 0.6rem;
+  max-width: 74ch;
+}
+
+/* A tick drawn in CSS, so the list carries no glyph the screen reader has to
+   read out before every item. */
+.checklist li::before {
+  content: "";
+  position: absolute;
+  left: 0.25rem;
+  top: 0.52em;
+  width: 0.42rem;
+  height: 0.72rem;
+  border: solid var(--ok);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
 .note {
   background: var(--bg-alt);
   border: 1px solid var(--border);
