@@ -1,8 +1,8 @@
 /**
  * serve.mjs — a local static server for dist/, for previewing a build.
  *
- * It resolves clean URLs the way GitHub Pages does (`/spec/` → `/spec/index.html`)
- * and falls back to `404.html`, so what you see locally is what gets published.
+ * It resolves clean URLs the way Netlify does (`/spec/` → `/spec/index.html`) and
+ * falls back to `404.html`, so what you see locally is what gets published.
  */
 
 import { createReadStream } from "node:fs";

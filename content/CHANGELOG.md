@@ -5,42 +5,54 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — with the pre-1.0 caveat that a
 minor release may break compatibility, in which case the break is spelled out below.
 
-## [Unreleased]
+## [0.6.0] — 2026-09-13
+
+**A naming release.** No change to the grammar or to the semantics of evaluation:
+`open-predicate-schema.json` is byte-identical to 0.5.0 apart from three lines — its `$id`, its
+`title` and its `$comment` — and the `$id` still names `v0.4.0`, because the `$id` version tracks
+the grammar and the grammar did not move. Consumers pinning that `$id` have only the new namespace
+to re-point at.
 
 ### Changed
 
-- **Renamed to OpenPredicate, and moved to a dedicated organisation.** The working title
-  *JSON Query Language* is retired. The project is now **OpenPredicate**, stewarded by the
-  [OpenPredicate](https://openpredicate.tech) organisation, whose purpose is to carry the grammar
-  to an open standard and push for its adoption. This is the single pass the README promised: the
-  repository, both package names, the schema `$id`, the problem-type URIs, the CLI and the vendor
-  keyword all move together, so nothing is left half-renamed.
+- **The name is settled, and the project has a dedicated organisation.** **OpenPredicate** is
+  stewarded by the [OpenPredicate](https://openpredicate.tech) organisation, whose purpose is to
+  carry the grammar to an open standard and push for its adoption. This is the single pass the
+  README promised: the repository, both package names, the schema `$id`, the problem-type URIs,
+  the CLI and the vendor keyword all derive from the one namespace, so nothing is left
+  half-named.
 
-  | | Was | Is |
-  | --- | --- | --- |
-  | Repository | `christosgkoros/json-query-language` | [`OpenPredicate/open-predicate`](https://github.com/OpenPredicate/open-predicate) |
-  | Schema file | `query-language-schema.json` | `open-predicate-schema.json` |
-  | Schema `$id` | `https://christosgkoros.com/json/query-language/v0.4.0/query-language-schema.json` | `https://openpredicate.tech/schema/v0.4.0/open-predicate-schema.json` |
-  | Problem types | `https://christosgkoros.com/json/query-language/problems/…` | `https://openpredicate.tech/problems/…` |
-  | npm package | `json-query-language` | `open-predicate` |
-  | GitHub Packages | `@christosgkoros/json-query-language` | `@openpredicate/open-predicate` |
-  | CLI | `jql-generate` | `open-predicate-generate` |
-  | Vendor keyword | `x-jql` | `x-open-predicate` |
-  | Generator config | `jql.config.json` | `open-predicate.config.json` |
+  | | Name |
+  | --- | --- |
+  | Repository | [`OpenPredicate/open-predicate`](https://github.com/OpenPredicate/open-predicate) |
+  | Schema file | `open-predicate-schema.json` |
+  | Schema `$id` | `https://openpredicate.tech/schema/v0.4.0/open-predicate-schema.json` |
+  | Problem types | `https://openpredicate.tech/problems/…` |
+  | npm package | `open-predicate` |
+  | GitHub Packages | `@openpredicate/open-predicate` |
+  | CLI | `open-predicate-generate` |
+  | Vendor keyword | `x-open-predicate` |
+  | Generator config | `open-predicate.config.json` |
 
   **Migration.** Mechanical, and only for identifiers — no filter valid before this release becomes
-  invalid, because the grammar and the evaluation semantics did not move. In a resource schema,
-  rename `x-jql` to `x-open-predicate`; the generator does not read the old spelling, and a stale
-  `x-jql` is silently ignored, so a field you meant to exclude would become queryable. Re-point any
-  `$ref` or pinned `$id` at the new URL, and any RFC 9457 `type` matching at the new problem base.
-  Rename a generator config file, or pass it explicitly with `--config`. The `$id` still names
+  invalid, because the grammar and the evaluation semantics did not move. In a resource schema, the
+  vendor keyword the generator reads is `x-open-predicate`; any other spelling is silently ignored,
+  so a field you meant to exclude would become queryable. Point any `$ref` or pinned `$id` at the
+  `$id` above, and any RFC 9457 `type` matching at the problem base above. A generator config file
+  is `open-predicate.config.json`, or pass it explicitly with `--config`. The `$id` still names
   `v0.4.0` — the version tracks the grammar, which is unchanged; only the namespace it sits under
-  is new. Neither the old namespace nor the old package name was ever served or published, so no
-  working deployment can be pinned to them.
+  is new. Nothing was ever served or published under any other namespace or package name, so no
+  working deployment can be pinned elsewhere.
 
-  **On the entries below.** Past releases are written up in the new names, so the whole document
-  reads in one vocabulary; the table above is what translates an older entry back to the names that
-  shipped at the time. Released artefacts are unaffected — this renames the project, not history.
+  **On the entries below.** Past releases are written up in these names, so the whole document
+  reads in one vocabulary. Released artefacts are unaffected — this names the project, not history.
+
+### Added
+
+- **Brand assets, in [`assets/`](./assets/).** The `{ > }` mark — JSON braces around a comparison —
+  as SVG and as raster at three sizes, plus a wordmark for light and dark backgrounds.
+  [`assets/README.md`](./assets/README.md) states the palette and the usage rules. The README now
+  opens with the mark. MIT-licensed with the rest of the repository.
 
 ## [0.5.0] — 2026-09-13
 
@@ -300,9 +312,8 @@ grammar and the grammar did not move. Consumers pinning that `$id` have nothing 
 ### Removed
 
 - **Publishing.** The release workflow no longer ships to npmjs.com or GitHub Packages. Neither
-  registry ever received a copy, and while the name is a working title neither should: publishing
-  under a placeholder claims the name, and npm blocks a name from reuse permanently once it has
-  been published and unpublished. `.github/workflows/release.yml` now only verifies a release —
+  registry ever received a copy, and neither should before the name is final: publishing claims a
+  name, and npm blocks a name from reuse permanently once it has been published and unpublished. `.github/workflows/release.yml` now only verifies a release —
   the test suite, and the tag-against-`package.json` check — and uploads nothing. The
   `NPM_TOKEN` secret and `.github/scripts/version-published.sh` are deleted with it.
   [RELEASING.md](./RELEASING.md#turning-publishing-back-on) keeps what the jobs needed, so they
@@ -375,9 +386,9 @@ annotations and its version strings.
 - **`$id` is now `…/v0.3.0/open-predicate-schema.json`.** Consumers pin by `$id`, so the version
   in the path moves with the release. `SPEC.md`, the OpenAPI examples and the generated
   capability document were all still naming v0.2.0; they now agree.
-- **README §*Status* states that this is a work in progress, name included.** *JSON Query
-  Language* is a working title, and every identifier downstream of it — both package names, the
-  `$id`, the URLs in the integration examples — is a placeholder, several of which do not
+- **README §*Status* states that this is a work in progress, name included.** The name is not
+  final, and every identifier downstream of it — both package names, the `$id`, the URLs in the
+  integration examples — is a placeholder, several of which do not
   resolve. Getting them right is deliberately deferred until the name is settled, because a
   rename moves all of them at once. A notice at the top of the README says the same thing before
   a reader reaches an install command that will not work.
@@ -469,6 +480,7 @@ Initial research draft: `$and`, `$or`, `$not` over eight leaf condition types
 (`$eq`, `$ne`, `$in`, `$nin`, `$like`, `$nlike`, `$gt`/`$gte`/`$lt`/`$lte`/`$between`, `$isnull`),
 laid out as an OpenAPI `components.schemas` fragment.
 
+[0.6.0]: https://github.com/OpenPredicate/open-predicate/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/OpenPredicate/open-predicate/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/OpenPredicate/open-predicate/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/OpenPredicate/open-predicate/compare/v0.3.0...v0.3.1
