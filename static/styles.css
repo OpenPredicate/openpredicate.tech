@@ -9,14 +9,14 @@
 :root {
   --ink: #0f172a;
   --sky: #38bdf8;
-  --sky-deep: #0284c7;
+  --sky-deep: #0277b3;
 
   --bg: #ffffff;
   --bg-alt: #f8fafc;
   --bg-sunk: #f1f5f9;
   --fg: #0f172a;
   --fg-muted: #475569;
-  --fg-faint: #64748b;
+  --fg-faint: #5d6b80;
   --border: #e2e8f0;
   --border-strong: #cbd5e1;
   --link: #0369a1;
@@ -33,7 +33,7 @@
   --t-str: #a7f3d0;
   --t-num: #fde68a;
   --t-lit: #fca5a5;
-  --t-com: #64748b;
+  --t-com: #7d8ba3;
   --t-brace: #94a3b8;
 
   --radius: 12px;
@@ -207,6 +207,9 @@ p {
   gap: 1.35rem;
   margin-left: auto;
   font-size: 0.95rem;
+  /* overflow-x cannot engage on a flex item until its automatic
+     min-width floor is lifted; without this the nav widens the header. */
+  min-width: 0;
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -248,6 +251,13 @@ p {
 @media (max-width: 900px) {
   .gh {
     display: none;
+  }
+  /* The nav scrolls sideways at this width and its scrollbar is hidden, so
+     without an edge fade there is nothing to suggest that the items past the
+     cut — Playground, Errors, Changelog — exist at all. */
+  .site-header nav {
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 26px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 26px), transparent);
   }
 }
 
@@ -372,7 +382,7 @@ p {
 
 @media (max-width: 900px) {
   .hero-inner {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .hero .lede {
     max-width: none;
@@ -410,11 +420,11 @@ p {
 }
 
 .cards.three {
-  grid-template-columns: repeat(auto-fit, minmax(285px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(285px, 100%), 1fr));
 }
 
 .cards.two {
-  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(380px, 100%), 1fr));
 }
 
 .card {
@@ -529,7 +539,7 @@ table.truth .no {
 
 @media (max-width: 900px) {
   .rule {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -591,6 +601,7 @@ button.copy {
   border: 1px solid rgba(148, 163, 184, 0.22);
   border-radius: 6px;
   padding: 0.24rem 0.55rem;
+  min-height: 24px;
   cursor: pointer;
   opacity: 0;
   transition: opacity 0.14s ease;
@@ -736,12 +747,16 @@ button.copy.done {
 }
 
 .anchor {
-  margin-left: 0.45rem;
-  color: var(--border-strong);
+  display: inline-block;
+  margin-left: 0.25rem;
+  color: var(--fg-faint);
   text-decoration: none;
   font-weight: 400;
   opacity: 0;
   font-size: 0.85em;
+  min-width: 24px;
+  line-height: 24px;
+  text-align: center;
 }
 
 h1:hover .anchor,
@@ -750,6 +765,16 @@ h3:hover .anchor,
 h4:hover .anchor,
 .anchor:focus-visible {
   opacity: 1;
+}
+
+/* There is no hover on a touchscreen, so anything revealed only by hover is
+   simply unavailable there. Both of these are real controls, not decoration:
+   the copy button is how a reader gets a filter out of the page. */
+@media (hover: none) {
+  .anchor,
+  figure.code button.copy {
+    opacity: 1;
+  }
 }
 
 .note {
@@ -911,11 +936,16 @@ h4:hover .anchor,
 
 @media (max-width: 1000px) {
   .doc-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .toc {
     position: static;
-    max-height: none;
+    /* The specification's contents run to 36 entries. Inline and uncapped that
+       is several screens of navigation before the document itself begins, so
+       the list is capped and scrolls within its own box instead. */
+    max-height: 45vh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
     border: 1px solid var(--border);
     border-radius: var(--radius);
     padding: 1rem 1.1rem;
@@ -1034,7 +1064,7 @@ tr:target {
 
 dl.facts {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
   gap: 1rem;
   margin: 1.8rem 0 2.4rem;
   padding: 1.1rem 1.3rem;
@@ -1150,6 +1180,7 @@ dl.facts dd {
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 0.16rem 0.5rem;
+  min-height: 24px;
   cursor: pointer;
 }
 
@@ -1263,7 +1294,7 @@ dl.facts dd {
 
 @media (max-width: 900px) {
   .pg-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .pg-editor,
   .pg-result {
@@ -1302,6 +1333,9 @@ dl.facts dd {
 
 .footer-grid li {
   margin-bottom: 0.4rem;
+  /* The contact address is one long unbreakable token; without this it runs
+     past the page edge between the 700px and 900px breakpoints. */
+  overflow-wrap: break-word;
 }
 
 .footer-grid .brand {
@@ -1314,7 +1348,7 @@ dl.facts dd {
 
 @media (max-width: 700px) {
   .footer-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: 1.6rem;
   }
 }

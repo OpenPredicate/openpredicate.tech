@@ -461,22 +461,57 @@ ${urls}
     `User-agent: *\nAllow: /\nSitemap: ${SITE.origin}/sitemap.xml\n`,
   );
 
-  // Netlify reads _headers from the publish directory. The schema needs three
-  // things a static host does not give it by default: the media type a $ref
-  // consumer expects, CORS — it is fetched cross-origin by browser tooling and
-  // by this site's own playground — and an immutable cache, which is safe
-  // precisely because a published $id never changes. Generated per version so a
-  // grammar bump does not need an edit here.
-  const headers = (await publishedVersions())
-    .map(
-      (v) => `/schema/v${v}/open-predicate-schema.json
+  // Netlify reads _headers from the publish directory. It is generated rather
+  // than declared in netlify.toml because that file cannot scope headers to a
+  // deploy context, and because the schema's rules must follow the versions
+  // that actually exist.
+  //
+  // The site ships no inline script, no inline style, no event handler
+  // attribute and no third-party origin, so it can carry a policy this strict.
+  // Anything that later needs this relaxed is a sign something was pulled in
+  // that the site had deliberately done without.
+  const csp = [
+    "default-src 'none'",
+    "script-src 'self'",
+    "style-src 'self'",
+    "img-src 'self'",
+    "connect-src 'self'",
+    "base-uri 'none'",
+    "form-action 'none'",
+    "frame-ancestors 'none'",
+  ].join("; ");
+
+  const global = [
+    `Content-Security-Policy: ${csp}`,
+    // The schema is served as application/schema+json, a type browsers have no
+    // handler for; nosniff stops one being guessed at.
+    "X-Content-Type-Options: nosniff",
+    "Referrer-Policy: strict-origin-when-cross-origin",
+  ];
+
+  // Netlify noindexes deploy previews on its own, but the most recent branch
+  // deploy stays indexable — and a branch deploy of this site is a full second
+  // copy of a specification, which must not compete with the real one. CONTEXT
+  // is set by Netlify and absent locally, and a local build should look like
+  // production, so only an explicitly non-production context opts in.
+  const context = process.env.CONTEXT;
+  if (context && context !== "production") global.push("X-Robots-Tag: noindex");
+
+  // The schema needs three things a static host does not give it by default:
+  // the media type a $ref consumer expects, CORS — it is fetched cross-origin
+  // by browser tooling — and an immutable cache, which is safe precisely
+  // because a published $id never changes.
+  const schemaRules = (await publishedVersions()).map(
+    (v) => `/schema/v${v}/open-predicate-schema.json
   Content-Type: application/schema+json; charset=utf-8
   Access-Control-Allow-Origin: *
-  Cache-Control: public, max-age=31536000, immutable
-`,
-    )
-    .join("\n");
-  await writeFile(join(OUT, "_headers"), headers);
+  Cache-Control: public, max-age=31536000, immutable`,
+  );
+
+  await writeFile(
+    join(OUT, "_headers"),
+    `${[`/*\n${global.map((h) => `  ${h}`).join("\n")}`, ...schemaRules].join("\n\n")}\n`,
+  );
 }
 
 async function main() {
