@@ -5,6 +5,145 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — with the pre-1.0 caveat that a
 minor release may break compatibility, in which case the break is spelled out below.
 
+## [Unreleased]
+
+## [0.6.1] — 2026-09-14
+
+**A packaging release.** No change to the grammar, the schema or the semantics of evaluation:
+`open-predicate-schema.json` is byte-identical to 0.6.0, and the `$id` still names `v0.4.0`. What
+changed is that the package now works the way 0.6.0 said it did.
+
+### Fixed
+
+- **The CLI did nothing when invoked as a CLI.** `tools/generate-filter-schema.mjs` guarded its entry
+  point with `fileURLToPath(import.meta.url) === process.argv[1]`, and npm installs a `bin` as a
+  **symlink** — so `argv[1]` was `node_modules/.bin/open-predicate-generate` while `import.meta.url`
+  was the file it pointed at. The comparison was false, `main()` never ran, and the process exited
+  **0 having printed nothing**. Every `npx @open-predicate/open-predicate` and every global install
+  was affected in `0.6.0`, the first release to ship a `bin` at all.
+
+  It went unnoticed because the two ways it is exercised here both avoid the symlink:
+  `npm run generate:example` and the tests call the file by path. The same comparison also failed for
+  a plain path invocation anywhere under a symlinked directory — including `/tmp` on macOS, which is
+  a symlink to `/private/tmp`.
+
+  The guard now compares through `realpathSync` on both sides, and `tests/generator.test.mjs` runs
+  the real generator through a real symlink and requires output, so the regression cannot return. It
+  still must not run on import, and that is asserted in the same test.
+
+- **`engines` was missing, so an unsupported Node failed obscurely.** The package now declares
+  `"node": ">=20.10.0"`. That is the real floor, not a guess: the generator uses `parseArgs` from
+  `node:util`, and the consumption path the README documents —
+  `import schema from '@open-predicate/open-predicate' with { type: 'json' }` — needs import
+  attributes, which is 20.10. Without the field, npm had nothing to warn against and a user on an
+  older line got a stack trace instead of a version complaint.
+
+- **The release pipeline never exercised the artifact it publishes.** `npm test` and
+  `npm run generate:example` both invoke the generator by path, which is the one way that never
+  crosses the symlink npm installs a `bin` as — so the no-op above passed every check and shipped.
+  [`.github/workflows/release.yml`](./.github/workflows/release.yml) now packs the tarball, installs
+  it into a scratch project the way a consumer would, and drives every entry point the README
+  documents: the bin through its symlink, `require()`, the ESM import attribute, and
+  `./generate`. It also asserts the generator stays silent when merely imported. A release cannot
+  now ship an artifact whose documented entry points do not work.
+
+### Changed
+
+- **The npm package is scoped: `@open-predicate/open-predicate`.** 0.6.0 named it `open-predicate`,
+  unscoped; it now sits under the `open-predicate` organisation on npmjs.com, which is where the
+  project's packages will live. Nothing was ever published under the unscoped name, so there is no
+  version to migrate from and no redirect to leave behind. GitHub Packages is unaffected — it still
+  carries `@openpredicate/open-predicate`, because that scope has to match the repository owner.
+
+  One consequence worth knowing: `npx` resolves a *package* name, so the generator is now
+  `npx @open-predicate/open-predicate` rather than `npx open-predicate-generate`. The `bin` is
+  still named `open-predicate-generate` once the package is installed.
+
+  The unscoped `open-predicate` is claimed anyway, as a deprecated placeholder holding two files
+  and no code, so the name cannot end up on something unrelated to the project.
+  `npm install open-predicate` prints a redirect to the scoped package. It is not versioned
+  alongside releases and the release pipeline never touches it — see
+  [`RELEASING.md`](./RELEASING.md#the-reserved-unscoped-name).
+
+### Added
+
+- **The project has a written governance and contribution process.**
+  [`GOVERNANCE.md`](./GOVERNANCE.md) states how a decision is made and what it costs — editorial,
+  substantive-compatible, or normative, where normative requires a record under
+  [`decisions/`](./decisions), a migration note and a `$id` bump. It sets out how a disputed design
+  call is resolved (answered in writing, then a decision record quoting the objection in the
+  objector's words, then 14-day lazy consensus, then the editor decides **and the dissent is recorded
+  in the record**), what earns commit rights, and an explicit royalty-free patent posture — MIT
+  settles copyright and says nothing about patents, which is the first thing an adopter's lawyer
+  looks for. It also states that there is currently one maintainer and calls that a defect rather
+  than a design.
+
+  [`CONTRIBUTING.md`](./CONTRIBUTING.md) leads with the thing the README already says is most useful
+  — *disagreement* — and makes the three entry points concrete: file a design objection, build an
+  implementation, or claim conformance for a library that already exists. It is candid that
+  `tests/fixtures/` checks schema well-formedness only, has no records or expected results, uses an
+  ajv-flavoured `expectKeyword`, and is excluded from the published package; and it names promoting
+  `experiments/filter-to-sql/cases.mjs` (73 cases over 10 records, already shaped
+  `{group, id, title, filter, expect}`) into a portable conformance suite as the highest-value
+  contribution currently available.
+
+  Also added: [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md), which makes explicit that blunt technical
+  disagreement is welcome and is not incivility, and discloses that a report about the sole
+  maintainer has nowhere independent to go inside the project;
+  [`SECURITY.md`](./SECURITY.md), which defines what a vulnerability even means for a specification
+  — a rule that makes conforming implementations unsafe, a filter that stays inside the §7 limits and
+  is still superlinear, or any path where a predicate ends up dropped, widened or truncated, since
+  that is an authorization bypass wherever filters carry tenancy; [`SUPPORT.md`](./SUPPORT.md); three
+  issue forms; and a pull-request template whose checklist is tied to the invariants the tests
+  already enforce. Discussions and private vulnerability reporting are enabled on the repository.
+
+- **The schema is served from its `$id`.**
+  `https://openpredicate.tech/schema/v0.4.0/open-predicate-schema.json` now returns the file it
+  identifies, as `application/schema+json`, with `Access-Control-Allow-Origin: *` so browser-based
+  tooling can fetch it and `Cache-Control: public,max-age=31536000,immutable` because a versioned
+  `$id` never changes (§9). The served bytes are identical to
+  [`open-predicate-schema.json`](./open-predicate-schema.json) in this repository.
+
+  This closes what the README called the one piece of remaining work. The `$ref`-by-URL workflow
+  that [Using it from OpenAPI](./README.md#using-it-from-openapi) and the capability document
+  examples are written around now describes today rather than an intended end state, and the five
+  RFC 9457 problem types under `https://openpredicate.tech/problems/` dereference as well. There is
+  deliberately **no** unversioned or `latest` schema URL; both 404.
+
+  Serving it is a second repository's job, so a release is not finished when the tag is pushed —
+  [`OpenPredicate/openpredicate.tech`](https://github.com/OpenPredicate/openpredicate.tech) vendors
+  the artefacts and has to be synced at the tag. That step is now written down in
+  [`RELEASING.md`](./RELEASING.md#serving-the-schema-from-its-id).
+
+- **Publishing is back on, and npmjs.com authenticates by OIDC.**
+  [`.github/workflows/release.yml`](./.github/workflows/release.yml) publishes to both registries
+  when a GitHub Release is published. The npmjs job uses npm's [trusted
+  publishing](https://docs.npmjs.com/trusted-publishers): it requests `id-token: write` and npm
+  exchanges that for a short-lived credential, so there is **no `NPM_TOKEN` secret** in this
+  repository and nothing to rotate. Provenance is attached automatically, linking each tarball to
+  the workflow run and commit that built it — though only for tarballs the workflow publishes, so
+  0.6.0 has none: its bootstrap publish came from a laptop, which is the one publish OIDC cannot
+  do. 0.6.1 is the first over OIDC. GitHub Packages stays token-authenticated — it has no
+  OIDC equivalent — but `GITHUB_TOKEN` is minted per run and expires with it.
+
+  `.github/scripts/version-published.sh` is restored alongside, so each job skips a version it has
+  already published and a partially-failed release can be re-run safely.
+
+  **The trust is pinned to the repository and to the workflow filename.** Renaming `release.yml`
+  breaks publishing until the trusted publisher is updated to match.
+
+  **npm cannot mint a package's first version over OIDC**, because a trusted publisher can only be
+  attached to a package that already exists. Claiming `@open-predicate/open-predicate` was therefore
+  a one-time manual publish, documented along with everything it cost to get right in
+  [`RELEASING.md`](./RELEASING.md#trusted-publishing-and-the-one-time-bootstrap) — including that
+  *configuring* the trusted publisher needs npm >= 12, which fails with an unexplained `E400` on
+  npm 11 because the older client omits the `permissions` field the registry now requires.
+
+- **`@open-predicate/open-predicate` is on npmjs.com**, public and installable, from `0.6.0` on. The
+  package is the schema: `require()` it, or `import` it with `{ type: 'json' }`. The trusted
+  publisher is configured, so every release from here is published by the workflow rather than by
+  hand. GitHub Packages gets its first copy with the next release.
+
 ## [0.6.0] — 2026-09-13
 
 **A naming release.** No change to the grammar or to the semantics of evaluation:
@@ -104,10 +243,11 @@ document's top-level members. No filter valid under 0.4.0 becomes invalid.
   `--max-filter-depth` is given and `maxDepth` is not, the enforced bound is published.
 - **The generator is part of the package.** `tools/` was not in `package.json` `files` and there
   was no `bin` entry, so the tool the README points readers at could not travel with the package
-  at all. It is now a `bin` named `open-predicate-generate`, with `open-predicate/generate` exporting
-  `generateFilterSchema` for programmatic use. This repository still publishes no artifacts
-  ([RELEASING.md](./RELEASING.md)), so the command is reachable from a clone or a git install and
-  not from npmjs; what changed is that it is ready to be, and `npm pack` now contains it.
+  at all. It is now a `bin` named `open-predicate-generate`, with
+  `@open-predicate/open-predicate/generate` exporting `generateFilterSchema` for programmatic use.
+  At the time of this release the repository still published no artifacts, so the command was
+  reachable from a clone or a git install and not from npmjs; what changed here is that it was
+  ready to be, and `npm pack` contained it. Publishing arrived in 0.6.0.
 - **[SPEC.md §2.2](./SPEC.md#22-capability-discovery) documents the capability document's
   top-level members** — `queryLanguage`, `profiles`, `fields`, `limits` and `filterSchema` — in a
   table beside the existing per-field one. `limits` appeared in the example and in no table, and
@@ -480,6 +620,7 @@ Initial research draft: `$and`, `$or`, `$not` over eight leaf condition types
 (`$eq`, `$ne`, `$in`, `$nin`, `$like`, `$nlike`, `$gt`/`$gte`/`$lt`/`$lte`/`$between`, `$isnull`),
 laid out as an OpenAPI `components.schemas` fragment.
 
+[0.6.1]: https://github.com/OpenPredicate/open-predicate/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/OpenPredicate/open-predicate/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/OpenPredicate/open-predicate/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/OpenPredicate/open-predicate/compare/v0.3.1...v0.4.0
